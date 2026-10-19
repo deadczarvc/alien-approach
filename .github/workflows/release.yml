@@ -1,0 +1,32 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check tag matches VERSION
+        run: test "${GITHUB_REF_NAME#v}" = "$(cat VERSION)"
+      - name: Probe bridge X solvers
+        run: |
+          pip install z3-solver clingo
+          python alien-approach/scripts/probe-f0.py
+      - name: Build .skill and .zip
+        run: python tools/build_release.py
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "alien-approach $GITHUB_REF_NAME" \
+            --notes-file <(awk -v v="$(cat VERSION)" '$0 ~ "^## "v{f=1;next} /^## /{f=0} f' CHANGELOG.md)
